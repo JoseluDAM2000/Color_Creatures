@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">Color_Creatures</string>
+    <string name="texto_defecto">¡Tengo hambre, dame de comer mi color!</string>
+    <string name="texto_bien">¡Gracias!</string>
+    <string name="texto_mal">¡PUAG!\n¡Ese color no me gusta!</string>
+    <string name="texto_boton_siguiente">Siguiente</string>
+    <string name="texto_boton_foto">Hacer foto</string>
 </resources>
