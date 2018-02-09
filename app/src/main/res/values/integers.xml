@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <integer name="tiempo_refresco_monigote">150</integer>
+    <integer name="tiempo_inicial_carne">1000</integer>
+    <integer name="tiempo_refresco_carne">400</integer>
+</resources>
