@@ -4,5 +4,17 @@
     <string name="texto_bien">¡Gracias!</string>
     <string name="texto_mal">¡PUAG!\n¡Ese color no me gusta!</string>
     <string name="texto_boton_siguiente">Siguiente</string>
-    <string name="texto_boton_foto">Hacer foto</string>
+    <string name="texto_boton_foto">Dar alimento</string>
+    <string name="error_lectura">Error al leer imagen de la galería.</string>
+
+    <string name="titulo_menu">¿Como deseas buscar la comida?</string>
+    <string-array name="opciones">
+        <item>Hacer foto</item>
+        <item>Elegir de la galeria</item>
+        <item>Cancelar</item>
+    </string-array>
+
+    <string name="tipo_imagen">image/*</string>
+    <string name="titulo_chooser"></string>
+
 </resources>

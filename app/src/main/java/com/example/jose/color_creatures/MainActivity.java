@@ -1,34 +1,32 @@
 package com.example.jose.color_creatures;
 
 import android.Manifest;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.drawable.AnimationDrawable;
+import android.media.MediaScannerConnection;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.StrictMode;
+import android.provider.MediaStore;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Base64;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
@@ -41,17 +39,21 @@ public class MainActivity extends AppCompatActivity {
     private String colorFoto;
     private String colorActual;
 
-    private String mCurrentPhotoPath;
-
+    private String currentPhotoPath;
 
     private final String AZUL = "AZUL";
     private final String ROJO = "ROJO";
     private final String VERDE = "VERDE";
     private final String GRIS = "GRIS";
-    private final String NOMBRE_IMAGEN = "imagen.png";
+
+    private final String CARPETA_IMAGEN = "ColorCreatures/";
+    private final String RUTA_IMAGEN = CARPETA_IMAGEN + "ColorCreatures";
 
     private final int REQUEST_IMAGE_CAPTURE = 1;
     private final int REQUEST_STORAGE = 2;
+    private final int REQUEST_READ_STORAGE = 3;
+    private final int REQUEST_GALERY = 4;
+
     private final int TOLERANCIA_GRISES = 40;
 
 
@@ -62,6 +64,13 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        //No es una buena práctica hacer lecturas/escrituras desde el hilo principal,
+        //pero como me dio problemas el otro dia haciendolo desde un hilo tengo que
+        //machacar la politica de la app para poder hacerlo desde aquí.
+        StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
+        StrictMode.setVmPolicy(builder.build());
+
+
         tvcolores = findViewById(R.id.textViewColores);
         boton = findViewById(R.id.botonCamara);
         texto = findViewById(R.id.texto);
@@ -69,9 +78,7 @@ public class MainActivity extends AppCompatActivity {
         ivCarne = findViewById(R.id.carne);
 
         ivCarne.setBackgroundResource(R.drawable.animacion_carne);
-
         texto.setText(getString(R.string.texto_defecto));
-
         boton.setOnClickListener(new View.OnClickListener() {
 
             @Override
@@ -81,29 +88,92 @@ public class MainActivity extends AppCompatActivity {
                     cambiarMonigote();
                     boton.setText(getString(R.string.texto_boton_foto));
                 } else {
-                    //Creamos el Intent para llamar a la Camara
-                    Intent cameraIntent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
-
-                    //Lanzamos la aplicacion de la camara con retorno (forResult)
-                    startActivityForResult(cameraIntent, REQUEST_IMAGE_CAPTURE);
+                    cargarImagen();
                 }
             }
         });
         cambiarMonigote();
-
-
     }
 
-
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
-            Bundle extras = data.getExtras();
-            Bitmap imageBitmap = (Bitmap) extras.get("data");
-
-            colorFoto = obtenerColorDominante(imageBitmap);
+        if (resultCode == RESULT_OK) {
+            Bitmap imagen = null;
+            switch (requestCode) {
+                case REQUEST_GALERY:
+                    try {
+                        imagen = MediaStore.Images.Media.getBitmap(this.getContentResolver(), data.getData());
+                    } catch (IOException e) {
+                        Toast.makeText(this, getString(R.string.error_lectura), Toast.LENGTH_LONG).show();
+                    }
+                    break;
+                case REQUEST_IMAGE_CAPTURE:
+                    MediaScannerConnection.scanFile(this, new String[]{currentPhotoPath}, null, new MediaScannerConnection.OnScanCompletedListener() {
+                        @Override
+                        public void onScanCompleted(String s, Uri uri) {
+                        }
+                    });
+                    imagen = BitmapFactory.decodeFile(currentPhotoPath);
+                    break;
+            }
+            colorFoto = obtenerColorDominante(imagen);
             chequearFoto();
         }
+    }
 
+    private void cargarImagen() {
+        final CharSequence[] opciones = getResources().getStringArray(R.array.opciones);
+        final AlertDialog.Builder alertaOpciones = new AlertDialog.Builder(MainActivity.this);
+        alertaOpciones.setTitle(getString(R.string.titulo_menu));
+
+        alertaOpciones.setItems(opciones, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                if (opciones[i].equals(opciones[0])) {
+                    cargarImagenDesdeLaCamara();
+                } else {
+                    if (opciones[i].equals(opciones[1])) {
+                        cargarImagenDesdeLaGaleria();
+                    } else {
+                        dialogInterface.dismiss();
+                    }
+                }
+            }
+        });
+        alertaOpciones.show();
+    }
+
+    private void cargarImagenDesdeLaCamara() {
+        //Creamos la ruta donde almacenaremos las imagenes.
+        File fileImage = new File(Environment.getExternalStorageDirectory(), RUTA_IMAGEN);
+
+        //Comprobamos si el fichero existe y de no ser así se crea.
+        boolean isCreada = fileImage.exists();
+
+        if (!isCreada) {
+            isCreada = fileImage.mkdirs();
+        }
+
+        String nombreImagen = "";
+        if (isCreada) {
+            //Usamos un truco simple para que no haya imagenes con el mismo nombre y le concatenamos la extensión.
+            nombreImagen = (System.currentTimeMillis() / 1000) + ".png";
+        }
+
+        //Guardamos la ruta en la que escribimos las imagenes y creamos un File apuntando a la misma.
+        currentPhotoPath = Environment.getExternalStorageDirectory() + File.separator + RUTA_IMAGEN + File.separator + nombreImagen;
+
+        File imagen = new File(currentPhotoPath);
+
+        //Creamos el Intent para llamar a la Camara.
+        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(imagen));
+        startActivityForResult(intent, REQUEST_IMAGE_CAPTURE);
+    }
+
+    private void cargarImagenDesdeLaGaleria() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        intent.setType(getString(R.string.tipo_imagen));
+        startActivityForResult(intent.createChooser(intent, getString(R.string.titulo_chooser)), REQUEST_GALERY);
     }
 
     private void pedirPermisos() {
@@ -122,9 +192,17 @@ public class MainActivity extends AppCompatActivity {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_STORAGE);
             }
         }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.READ_EXTERNAL_STORAGE)) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_READ_STORAGE);
+            } else {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_READ_STORAGE);
+            }
+        }
     }
 
-    public String obtenerColorDominante(Bitmap mapaDeBits) {
+    private String obtenerColorDominante(Bitmap mapaDeBits) {
         if (null == mapaDeBits) return null;
 
         int cuentaRojo = 0;
@@ -142,7 +220,6 @@ public class MainActivity extends AppCompatActivity {
                 cuentaRojo += (color >> 16) & 0xFF;
                 cuentaVerde += (color >> 8) & 0xFF;
                 cuentaAzul += (color & 0xFF);
-
             }
         }
 
